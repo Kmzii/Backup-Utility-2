@@ -3,7 +3,8 @@ import json
 import logging
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QListWidget,
-    QPushButton, QFileDialog, QMessageBox, QLabel, QProgressBar
+    QPushButton, QFileDialog, QMessageBox, QLabel, QProgressBar,
+    QGroupBox, QFormLayout, QGridLayout
 )
 from PyQt5.QtCore import QThread, pyqtSignal
 import shutil
@@ -121,34 +122,51 @@ class BackupUtility(QWidget):
         # Main layout
         main_layout = QVBoxLayout()
 
-        # Top layout containing the list and buttons
-        top_layout = QHBoxLayout()
+        # Horizontal layout for list and buttons
+        h_layout = QHBoxLayout()
 
-        # List widget to display files and folders
+        # File and Folder List Group
+        list_group = QGroupBox("Files and Folders to Backup")
+        list_layout = QVBoxLayout()
         self.list_widget = QListWidget()
+        list_layout.addWidget(self.list_widget)
+        list_group.setLayout(list_layout)
 
-        # Status label
-        self.status_label = QLabel('')
+        # Button Group
+        button_group = QGroupBox("Actions")
+        button_layout = QVBoxLayout()
 
-        # Progress bar
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setValue(0)
-
-        # Buttons
         add_file_button = QPushButton('Add File')
         add_folder_button = QPushButton('Add Folder')
         remove_button = QPushButton('Remove Selected')
         set_destination_button = QPushButton('Set Destination')
         backup_button = QPushButton('Backup')
 
-        # Button layout
-        button_layout = QVBoxLayout()
         button_layout.addWidget(add_file_button)
         button_layout.addWidget(add_folder_button)
         button_layout.addWidget(remove_button)
         button_layout.addWidget(set_destination_button)
         button_layout.addWidget(backup_button)
         button_layout.addStretch()
+        button_group.setLayout(button_layout)
+
+        # Adding list and buttons to horizontal layout
+        h_layout.addWidget(list_group)
+        h_layout.addWidget(button_group)
+
+        # Progress and Status Group
+        progress_group = QGroupBox("Backup Progress")
+        progress_layout = QVBoxLayout()
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setValue(0)
+        self.status_label = QLabel('')
+        progress_layout.addWidget(self.progress_bar)
+        progress_layout.addWidget(self.status_label)
+        progress_group.setLayout(progress_layout)
+
+        # Adding groups to main layout
+        main_layout.addLayout(h_layout)
+        main_layout.addWidget(progress_group)
 
         # Connect buttons to functions
         add_file_button.clicked.connect(self.add_file)
@@ -157,18 +175,9 @@ class BackupUtility(QWidget):
         set_destination_button.clicked.connect(self.set_destination)
         backup_button.clicked.connect(self.start_backup)
 
-        # Add widgets to top layout
-        top_layout.addWidget(self.list_widget)
-        top_layout.addLayout(button_layout)
-
-        # Add top layout, progress bar, and status label to main layout
-        main_layout.addLayout(top_layout)
-        main_layout.addWidget(self.progress_bar)
-        main_layout.addWidget(self.status_label)
-
         self.setLayout(main_layout)
         self.setWindowTitle('Backup Utility')
-        self.setGeometry(300, 300, 600, 400)
+        self.setMinimumSize(960, 700)  # Set minimum size here
         self.show()
 
     def add_file(self):
@@ -238,7 +247,7 @@ class BackupUtility(QWidget):
         if os.path.exists('backup_data.json'):
             with open('backup_data.json', 'r') as f:
                 data = json.load(f)
-                for item in data['items']:
+                for item in data.get('items', []):
                     self.list_widget.addItem(item)
                 self.destination_folder = data.get('destination_folder', '')
 
