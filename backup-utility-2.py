@@ -1,6 +1,8 @@
 import sys
 import json
 import logging
+
+from PyQt5.QtGui import QFont, QIcon
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QListWidget,
     QPushButton, QFileDialog, QMessageBox, QLabel, QProgressBar,
@@ -132,6 +134,12 @@ class BackupUtility(QWidget):
         list_layout.addWidget(self.list_widget)
         list_group.setLayout(list_layout)
 
+        # Adding list group to horizontal layout
+        h_layout.addWidget(list_group)
+
+        # Vertical layout for Actions and Info Groups
+        actions_info_layout = QVBoxLayout()
+
         # Button Group
         button_group = QGroupBox("Actions")
         button_layout = QVBoxLayout()
@@ -150,9 +158,37 @@ class BackupUtility(QWidget):
         button_layout.addStretch()
         button_group.setLayout(button_layout)
 
-        # Adding list and buttons to horizontal layout
-        h_layout.addWidget(list_group)
-        h_layout.addWidget(button_group)
+        # Setting fixed width for button group
+        button_group.setFixedWidth(300)
+
+        # Adding button group to actions_info_layout
+        actions_info_layout.addWidget(button_group)
+
+        # Info Group
+        self.info_group = QGroupBox("Info")
+        info_layout = QVBoxLayout()
+
+        self.destination_label = QLabel("Destination Folder: Not set")
+        self.total_files_label = QLabel("Total Files: 0")
+        self.total_folders_label = QLabel("Total Folders: 0")
+
+        open_log_button = QPushButton()
+        open_log_button.setIcon(QIcon('assets/log-file.svg'))
+        open_log_button.clicked.connect(self.open_log_file)
+
+        info_layout.addWidget(self.destination_label)
+        info_layout.addWidget(self.total_files_label)
+        info_layout.addWidget(self.total_folders_label)
+        info_layout.addWidget(open_log_button)
+        info_layout.addStretch()
+        self.info_group.setLayout(info_layout)
+        self.info_group.setFixedWidth(300)
+
+        # Adding info group to actions_info_layout
+        actions_info_layout.addWidget(self.info_group)
+
+        # Adding actions_info_layout to h_layout
+        h_layout.addLayout(actions_info_layout)
 
         # Progress and Status Group
         progress_group = QGroupBox("Backup Progress")
@@ -164,7 +200,7 @@ class BackupUtility(QWidget):
         progress_layout.addWidget(self.status_label)
         progress_group.setLayout(progress_layout)
 
-        # Adding groups to main layout
+        # Adding progress group to main_layout
         main_layout.addLayout(h_layout)
         main_layout.addWidget(progress_group)
 
@@ -180,17 +216,42 @@ class BackupUtility(QWidget):
         self.setMinimumSize(960, 700)  # Set minimum size here
         self.show()
 
+        # Increase font size for all widgets and set heading fonts
+        self.update_fonts()
+
+    def update_fonts(self):
+        font = QFont()
+        font.setPointSize(10)  # Adjust the font size as needed
+
+        # Set font for all widgets
+        self.list_widget.setFont(font)
+        self.progress_bar.setFont(font)
+        self.status_label.setFont(font)
+        self.destination_label.setFont(font)
+        self.total_files_label.setFont(font)
+        self.total_folders_label.setFont(font)
+
+        # Set font for group headings
+        for group_box in self.findChildren(QGroupBox):
+            group_box.setFont(QFont(font.family(), font.pointSize() + 2))
+
+        # Set font for buttons
+        for button in self.findChildren(QPushButton):
+            button.setFont(font)
+
     def add_file(self):
         options = QFileDialog.Options()
         file, _ = QFileDialog.getOpenFileName(self, "Select File to Add", "", "All Files (*)", options=options)
         if file:
             self.list_widget.addItem(file)
+            self.update_info_labels()
 
     def add_folder(self):
         options = QFileDialog.Options()
         folder = QFileDialog.getExistingDirectory(self, "Select Folder to Add", options=options)
         if folder:
             self.list_widget.addItem(folder)
+            self.update_info_labels()
 
     def remove_selected(self):
         selected_items = self.list_widget.selectedItems()
@@ -198,11 +259,13 @@ class BackupUtility(QWidget):
             return
         for item in selected_items:
             self.list_widget.takeItem(self.list_widget.row(item))
+        self.update_info_labels()
 
     def set_destination(self):
         options = QFileDialog.Options()
         self.destination_folder = QFileDialog.getExistingDirectory(self, "Select Destination Folder", options=options)
         if self.destination_folder:
+            self.destination_label.setText(f"Destination Folder: {self.destination_folder}")
             QMessageBox.information(self, "Destination Set", f"Backup destination set to: {self.destination_folder}")
 
     def start_backup(self):
@@ -250,6 +313,29 @@ class BackupUtility(QWidget):
                 for item in data.get('items', []):
                     self.list_widget.addItem(item)
                 self.destination_folder = data.get('destination_folder', '')
+                if self.destination_folder:
+                    self.destination_label.setText(f"Destination Folder: {self.destination_folder}")
+        self.update_info_labels()
+
+    def update_info_labels(self):
+        total_files = 0
+        total_folders = 0
+
+        for i in range(self.list_widget.count()):
+            item_path = self.list_widget.item(i).text()
+            if os.path.isfile(item_path):
+                total_files += 1
+            elif os.path.isdir(item_path):
+                total_folders += 1
+
+        self.total_files_label.setText(f"Total Files: {total_files}")
+        self.total_folders_label.setText(f"Total Folders: {total_folders}")
+
+    def open_log_file(self):
+        try:
+            os.startfile('backup.log')  # Opens the log file using the default application
+        except OSError as e:
+            QMessageBox.warning(self, "Error Opening Log File", f"Failed to open log file: {e}")
 
 
 def setup_logging():
