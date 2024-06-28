@@ -1,17 +1,16 @@
 import sys
 import json
 import logging
-import os
-import shutil
-import subprocess
 
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
 from PyQt5.QtGui import QFont, QIcon
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QListWidget,
     QPushButton, QFileDialog, QMessageBox, QLabel, QGroupBox, QFormLayout,
-    QProgressBar, QToolTip
+    QProgressBar
 )
+import shutil
+import os
 
 
 class BackupWorker(QThread):
@@ -26,7 +25,7 @@ class BackupWorker(QThread):
         self.total_items = len(items)  # Total items to backup
 
     def run(self):
-        progress_step = 100 / self.total_items if self.total_items > 0 else 1
+        progress_step = 100 / self.total_items
         current_progress = 0
 
         for index, item in enumerate(self.items):
@@ -51,8 +50,8 @@ class BackupWorker(QThread):
                 self.status_updated.emit(f"Skipped {file_path} (No changes)")
                 logging.info(f"Skipped {file_path} (No changes)")
         except Exception as e:
-            self.status_updated.emit(f"Error copying {file_path}: {e}")
-            logging.error(f"Error copying {file_path}: {e}")
+            self.status_updated.emit(f"Skipped {file_path} ({e})")
+            logging.warning(f"Skipped {file_path} ({e})")
 
     def is_same_file(self, src, dst):
         if not os.path.exists(dst):
@@ -84,8 +83,8 @@ class BackupWorker(QThread):
                             self.status_updated.emit(f"Copied {file_path} to {destination_file_path}")
                             logging.info(f"Copied {file_path} to {destination_file_path}")
                         except Exception as e:
-                            self.status_updated.emit(f"Error copying {file_path}: {e}")
-                            logging.error(f"Error copying {file_path}: {e}")
+                            self.status_updated.emit(f"Skipped {file_path} ({e})")
+                            logging.warning(f"Skipped {file_path} ({e})")
                     else:
                         self.status_updated.emit(f"Skipped {file_path} (No changes)")
                         logging.info(f"Skipped {file_path} (No changes)")
@@ -94,8 +93,8 @@ class BackupWorker(QThread):
             self.status_updated.emit(summary_message)
             logging.info(summary_message)
         except Exception as e:
-            self.status_updated.emit(f"Error processing folder {folder_path}: {e}")
-            logging.error(f"Error processing folder {folder_path}: {e}")
+            self.status_updated.emit(f"Skipped folder: {folder_path} ({e})")
+            logging.warning(f"Skipped folder: {folder_path} ({e})")
 
 
 class BackupUtility(QWidget):
@@ -129,17 +128,17 @@ class BackupUtility(QWidget):
         button_group = QGroupBox("Actions")
         button_layout = QVBoxLayout()
 
-        self.add_file_button = QPushButton('Add File')
-        self.add_folder_button = QPushButton('Add Folder')
-        self.remove_button = QPushButton('Remove Selected')
-        self.set_destination_button = QPushButton('Set Destination')
-        self.backup_button = QPushButton('Backup')  # Make backup button an instance variable
+        add_file_button = QPushButton('Add File')
+        add_folder_button = QPushButton('Add Folder')
+        remove_button = QPushButton('Remove Selected')
+        set_destination_button = QPushButton('Set Destination')
+        backup_button = QPushButton('Backup')
 
-        button_layout.addWidget(self.add_file_button)
-        button_layout.addWidget(self.add_folder_button)
-        button_layout.addWidget(self.remove_button)
-        button_layout.addWidget(self.set_destination_button)
-        button_layout.addWidget(self.backup_button)  # Use the instance variable
+        button_layout.addWidget(add_file_button)
+        button_layout.addWidget(add_folder_button)
+        button_layout.addWidget(remove_button)
+        button_layout.addWidget(set_destination_button)
+        button_layout.addWidget(backup_button)
         button_layout.addStretch()
         button_group.setLayout(button_layout)
 
@@ -194,11 +193,11 @@ class BackupUtility(QWidget):
         main_layout.addWidget(progress_group)
 
         # Connect buttons to functions
-        self.add_file_button.clicked.connect(self.add_file)
-        self.add_folder_button.clicked.connect(self.add_folder)
-        self.remove_button.clicked.connect(self.remove_selected)
-        self.set_destination_button.clicked.connect(self.set_destination)
-        self.backup_button.clicked.connect(self.start_backup)  # Use the instance variable
+        add_file_button.clicked.connect(self.add_file)
+        add_folder_button.clicked.connect(self.add_folder)
+        remove_button.clicked.connect(self.remove_selected)
+        set_destination_button.clicked.connect(self.set_destination)
+        backup_button.clicked.connect(self.start_backup)
 
         self.setLayout(main_layout)
         self.setWindowTitle('Backup Utility')
@@ -230,120 +229,119 @@ class BackupUtility(QWidget):
         # Set font for progress bar
         self.progress_bar.setFont(font)
 
-        # Set font for tooltips
-        QToolTip.setFont(font)
-
     def add_file(self):
         options = QFileDialog.Options()
-        files, _ = QFileDialog.getOpenFileNames(self, "Select Files to Backup", "", "All Files (*);;Text Files (*.txt)", options=options)
-        for file in files:
+        file, _ = QFileDialog.getOpenFileName(self, "Select File to Add", "", "All Files (*)", options=options)
+        if file:
             self.list_widget.addItem(file)
-        self.update_info_labels()
+            self.update_info_labels()
 
     def add_folder(self):
         options = QFileDialog.Options()
-        folder = QFileDialog.getExistingDirectory(self, "Select Folder to Backup", "", options=options)
+        folder = QFileDialog.getExistingDirectory(self, "Select Folder to Add", options=options)
         if folder:
             self.list_widget.addItem(folder)
-        self.update_info_labels()
+            self.update_info_labels()
 
     def remove_selected(self):
-        for item in self.list_widget.selectedItems():
+        selected_items = self.list_widget.selectedItems()
+        if not selected_items:
+            return
+        for item in selected_items:
             self.list_widget.takeItem(self.list_widget.row(item))
         self.update_info_labels()
 
     def set_destination(self):
         options = QFileDialog.Options()
-        folder = QFileDialog.getExistingDirectory(self, "Select Destination Folder", options=options)
-        if folder:
-            self.destination_folder = folder
-            self.destination_label.setText(f"Destination Folder: {folder}")
-
-    def set_buttons_enabled(self, enabled):
-        self.add_file_button.setEnabled(enabled)
-        self.add_folder_button.setEnabled(enabled)
-        self.remove_button.setEnabled(enabled)
-        self.set_destination_button.setEnabled(enabled)
-        self.backup_button.setEnabled(enabled)
+        self.destination_folder = QFileDialog.getExistingDirectory(self, "Select Destination Folder", options=options)
+        if self.destination_folder:
+            self.destination_label.setText(f"Destination Folder: {self.destination_folder}")
+            QMessageBox.information(self, "Destination Set", f"Backup destination set to: {self.destination_folder}")
 
     def start_backup(self):
+        if not hasattr(self, 'destination_folder') or not self.destination_folder:
+            QMessageBox.warning(self, "No Destination", "Please set a backup destination first.")
+            return
+
         items = [self.list_widget.item(i).text() for i in range(self.list_widget.count())]
         if not items:
             QMessageBox.warning(self, "No Items", "Please add files or folders to backup.")
             return
 
-        if not hasattr(self, 'destination_folder'):
-            QMessageBox.warning(self, "No Destination", "Please set a destination folder.")
-            return
-
         self.set_buttons_enabled(False)  # Disable all buttons
-        self.worker = BackupWorker(items, self.destination_folder)
-        self.worker.progress_updated.connect(self.update_progress)
-        self.worker.status_updated.connect(self.update_status)
-        self.worker.completed.connect(self.backup_complete)
-        self.worker.start()
 
-    def update_progress(self, progress):
+        self.backup_worker = BackupWorker(items, self.destination_folder)
+        self.backup_worker.progress_updated.connect(self.update_progress_bar)
+        self.backup_worker.status_updated.connect(self.update_status_label)
+        self.backup_worker.completed.connect(self.backup_complete)
+        self.backup_worker.start()
+
+    def update_progress_bar(self, progress):
         self.progress_bar.setValue(progress)
 
-    def update_status(self, status):
-        self.status_label.setText(f"Status: {status}")
+    def update_status_label(self, status):
+        self.status_label.setText(status)
+
+    def set_buttons_enabled(self, enabled):
+        for button in self.findChildren(QPushButton):
+            button.setEnabled(enabled)
 
     def backup_complete(self):
-        self.set_buttons_enabled(True)  # Enable all buttons
-        QMessageBox.information(self, "Backup Complete", "The backup process has completed.")
-
-    def update_info_labels(self):
-        total_files = sum(1 for i in range(self.list_widget.count()) if os.path.isfile(self.list_widget.item(i).text()))
-        total_folders = sum(1 for i in range(self.list_widget.count()) if os.path.isdir(self.list_widget.item(i).text()))
-        self.total_files_label.setText(f"Total Files: {total_files}")
-        self.total_folders_label.setText(f"Total Folders: {total_folders}")
-
-    def load_data(self):
-        try:
-            with open('backup_data.json', 'r') as f:
-                data = json.load(f)
-                self.destination_folder = data['destination_folder']
-                self.destination_label.setText(f"Destination Folder: {self.destination_folder}")
-                for item in data['items']:
-                    self.list_widget.addItem(item)
-                self.update_info_labels()
-        except (FileNotFoundError, json.JSONDecodeError):
-            pass
-
-    def save_data(self):
-        data = {
-            'destination_folder': getattr(self, 'destination_folder', ''),
-            'items': [self.list_widget.item(i).text() for i in range(self.list_widget.count())]
-        }
-        with open('backup_data.json', 'w') as f:
-            json.dump(data, f)
+        self.progress_bar.setValue(100)
+        self.set_buttons_enabled(True)  # Re-enable all buttons
+        QMessageBox.information(self, "Backup Complete", "Backup completed successfully.")
 
     def closeEvent(self, event):
         self.save_data()
         event.accept()
 
+    def save_data(self):
+        items = [self.list_widget.item(i).text() for i in range(self.list_widget.count())]
+        data = {
+            'items': items,
+            'destination_folder': getattr(self, 'destination_folder', '')
+        }
+        with open('backup_data.json', 'w') as f:
+            json.dump(data, f)
+
+    def load_data(self):
+        if os.path.exists('backup_data.json'):
+            with open('backup_data.json', 'r') as f:
+                data = json.load(f)
+                for item in data.get('items', []):
+                    self.list_widget.addItem(item)
+                self.destination_folder = data.get('destination_folder', '')
+                if self.destination_folder:
+                    self.destination_label.setText(f"Destination Folder: {self.destination_folder}")
+        self.update_info_labels()
+
+    def update_info_labels(self):
+        total_files = 0
+        total_folders = 0
+
+        for i in range(self.list_widget.count()):
+            item_path = self.list_widget.item(i).text()
+            if os.path.isfile(item_path):
+                total_files += 1
+            elif os.path.isdir(item_path):
+                total_folders += 1
+
+        self.total_files_label.setText(f"Total Files: {total_files}")
+        self.total_folders_label.setText(f"Total Folders: {total_folders}")
+
     def open_log_file(self):
         try:
-            os.startfile('backup.log')
-        except AttributeError:
-            subprocess.call(['open', 'backup.log'])
+            os.startfile('backup.log')  # Opens the log file using the default application
+        except OSError as e:
+            QMessageBox.warning(self, "Error Opening Log File", f"Failed to open log file: {e}")
 
 
 def setup_logging():
-    logging.basicConfig(
-        filename='backup.log',
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        filemode='w'  # Set the file mode to 'w' to overwrite the log file each time
-    )
-
-
-def main():
-    app = QApplication(sys.argv)
-    ex = BackupUtility()
-    sys.exit(app.exec_())
+    logging.basicConfig(filename='backup.log', level=logging.INFO,
+                        format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 if __name__ == '__main__':
-    main()
+    app = QApplication(sys.argv)
+    backup_utility = BackupUtility()
+    sys.exit(app.exec_())
