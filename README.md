@@ -60,4 +60,4 @@ Contributions are welcome! Please fork the repository and submit a pull request 
 
 ## Contact
 
-For any questions or suggestions, please open an issue or contact me at [kmazumdersocials@example.com](mailto:kmazumdersocials@example.com).
+For any questions or suggestions, please open an issue or contact me at [kmazumdersocials@gmail.com](mailto:kmazumdersocials@gmail.com).
